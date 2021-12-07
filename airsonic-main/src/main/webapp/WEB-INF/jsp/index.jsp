@@ -61,26 +61,32 @@
             display: none;
         }
     </style>
+	
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+	<script>
+        $.get('top.view?', function(data) {
+            $('#upper').html(data);
+        });
+    </script>
+
 </head>
+
 
 <body class="bgcolor2" style="height: 100%; margin: 0; overflow-y: hidden">
     <div class="entire-panel">
-        <iframe id="upper" name="upper" scrolling="no" src="top.view?" onload="this.style.height=(this.contentWindow.document.body.clientHeight+15)+'px';" class="bgcolor2 main-navigation"></iframe>
+        <div id="upper" name="upper" class="bgcolor2 main-navigation"></div>
 
         <div class="lower">
             <div class="bgcolor2 left-nav-container" ${!model.showSideBar ? "style='display: none;'" : ""}>
-                <iframe id="left" name="left" src="left.view?" class="left-navigation"></iframe>
+                <div id="left" class="bgcolor2 playqueue-container left">
+                    <c:import url="/playQueue.view" />
+                </div>
             </div>
             <div class="non-left-navigation-container">
                 <div class="main-right-container">
                     <iframe id="main" name="main" src="${empty param.main? 'nowPlaying.view' : param.main}" class="bgcolor1 main-panel" allowfullscreen></iframe>
-                    <div class="bgcolor1 right-info-container" ${!model.showRight ? "style='display: none;'" : ""}>
-                        <iframe id="right" name="right" src="right.view?" class="right-info"></iframe>
-                    </div>
                 </div>
-                <div class="bgcolor2 playqueue-container">
-                    <c:import url="/playQueue.view" />
-                </div>
+                
            </div>
        </div>
 
