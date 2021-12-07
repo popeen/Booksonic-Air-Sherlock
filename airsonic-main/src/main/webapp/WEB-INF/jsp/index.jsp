@@ -62,15 +62,8 @@
         }
     </style>
 	
-	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-	<script>
-        $.get('top.view?', function(data) {
-            $('#upper').html(data);
-        });
-    </script>
 
 </head>
-
 
 <body class="bgcolor2" style="height: 100%; margin: 0; overflow-y: hidden">
     <div class="entire-panel">
@@ -92,5 +85,12 @@
 
        <iframe id="hidden" name="hidden" class="hidden-panel"></iframe>
    </div>
+   
+    <script>
+        $.get('top.view?', function(data) {
+            $('#upper').html(data);
+        });
+    </script>
+    
 </body>
 </html>
