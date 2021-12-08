@@ -71,19 +71,23 @@
 
         <div class="lower">
             <div class="bgcolor2 left-nav-container" ${!model.showSideBar ? "style='display: none;'" : ""}>
-                <div id="left" class="bgcolor2 playqueue-container left">
-                    <c:import url="/playQueue.view" />
-                </div>
+                <iframe id="left" name="left" src="left.view?" class="left-navigation"></iframe>
             </div>
             <div class="non-left-navigation-container">
                 <div class="main-right-container">
                     <iframe id="main" name="main" src="${empty param.main? 'nowPlaying.view' : param.main}" class="bgcolor1 main-panel" allowfullscreen></iframe>
+                
+                    <div class="bgcolor1 right-info-container" ${!model.showRight ? "style='display: none;'" : ""}>
+                        <iframe id="right" name="right" src="right.view?" class="right-info"></iframe>
+                    </div>
+                </div>
+                <div class="bgcolor2 playqueue-container">
+                    <c:import url="/playQueue.view" />
                 </div>
                 
            </div>
        </div>
-
-       <iframe id="hidden" name="hidden" class="hidden-panel"></iframe>
+       <iframe id="hidden" name="hidden" class="hidden-panel"></iframe>       
    </div>
    
     <script>
