@@ -82,7 +82,7 @@
         songs: [],
         
         bookmarks: {},
-        autoBookmark: ${model.autoBookmark},
+        autoBookmark: true,
         audioBookmarkFrequency: ${model.audioBookmarkFrequency},
 
         // Stream URL of the media being played
