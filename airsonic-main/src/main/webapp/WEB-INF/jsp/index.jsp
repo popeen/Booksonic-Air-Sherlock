@@ -67,19 +67,12 @@
 
 <body class="bgcolor2" style="height: 100%; margin: 0; overflow-y: hidden">
     <div class="entire-panel">
-        <div id="upper" name="upper" class="bgcolor2 main-navigation"></div>
+        <iframe id="upper" name="upper" src="top.view?" onload='javascript:(function(o){o.style.height=o.contentWindow.document.body.scrollHeight+"px";}(this));' class="main-navigation" style="background-color:#175d7b; color: #fff; min-height: 80px;"></iframe>
 
         <div class="lower">
-            <div class="bgcolor2 left-nav-container" ${!model.showSideBar ? "style='display: none;'" : ""}>
-                <iframe id="left" name="left" src="left.view?" class="left-navigation"></iframe>
-            </div>
             <div class="non-left-navigation-container">
                 <div class="main-right-container">
                     <iframe id="main" name="main" src="${empty param.main? 'nowPlaying.view' : param.main}" class="bgcolor1 main-panel" allowfullscreen></iframe>
-                
-                    <div class="bgcolor1 right-info-container" ${!model.showRight ? "style='display: none;'" : ""}>
-                        <iframe id="right" name="right" src="right.view?" class="right-info"></iframe>
-                    </div>
                 </div>
                 <div class="bgcolor2 playqueue-container">
                     <c:import url="/playQueue.view" />
@@ -90,11 +83,12 @@
        <iframe id="hidden" name="hidden" class="hidden-panel"></iframe>       
    </div>
    
-    <script>
-        $.get('top.view?', function(data) {
-            $('#upper').html(data);
-        });
-    </script>
+   <script>
+    $(window).on('resize', function(){
+        var top = $("#upper");
+        top.style.height=top.contentWindow.document.body.scrollHeight+"px";
+    });
+   </script>
     
 </body>
 </html>

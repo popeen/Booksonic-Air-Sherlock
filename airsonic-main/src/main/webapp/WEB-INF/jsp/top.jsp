@@ -116,7 +116,7 @@
     </script>
 </head>
 
-<body class="bgcolor2 topframe" style="margin:0.4em 1em 0 1em;" onload="init()">
+<body class="topframe" style="margin:0.4em 1em 0 1em;" onload="init()">
 
 <span id="dummy-animation-target" style="max-width:0;display: none"></span>
 
@@ -132,113 +132,35 @@
 <fmt:message key="top.help" var="help"/>
 <fmt:message key="top.search" var="search"/>
 
-<table style="margin:0;padding-top:5px">
-    <tr>
-        <td style="padding-right:4.5em;">
-            <img id="show-left-frame" src="<spring:theme code='sidebarImage'/>" onclick="showLeftFrame()" alt="" style="display:${model.showSideBar ? 'none' : 'inline'};cursor:pointer">
-            <img id="hide-left-frame" src="<spring:theme code='sidebarImage'/>" onclick="hideLeftFrame()" alt="" style="display:${model.showSideBar ? 'inline' : 'none'};cursor:pointer">
-        </td>
-        <td style="min-width:3em;padding-right:1em;text-align: center">
-            <a href="home.view?" target="main"><img src="<spring:theme code='homeImage'/>" title="${home}" alt="${home}"></a>
-            <div class="topHeader"><a href="home.view?" target="main">${home}</a></div>
-        </td>
-        <td style="min-width:3em;padding-right:1em;text-align: center">
-            <a href="nowPlaying.view?" target="main"><img src="<spring:theme code='nowPlayingImage'/>" title="${nowPlaying}" alt="${nowPlaying}"></a>
-            <div class="topHeader"><a href="nowPlaying.view?" target="main">${nowPlaying}</a></div>
-        </td>
-        <td style="min-width:3em;padding-right:1em;text-align: center">
-            <a href="starred.view?" target="main"><img src="<spring:theme code='starredImage'/>" title="${starred}" alt="${starred}"></a>
-            <div class="topHeader"><a href="starred.view?" target="main">${starred}</a></div>
-        </td>
-        <td style="min-width:3em;padding-right:1em;text-align: center">
-            <a href="playlists.view?" target="main"><img src="<spring:theme code='playlistImage'/>" title="${playlists}" alt="${playlists}"></a>
-            <div class="topHeader"><a href="playlists.view?" target="main">${playlists}</a></div>
-        </td>
-        <td style="min-width:4em;padding-right:1em;text-align: center">
-            <a href="podcastChannels.view?" target="main"><img src="<spring:theme code='podcastLargeImage'/>" title="${podcast}" alt="${podcast}"></a>
-            <div class="topHeader"><a href="podcastChannels.view?" target="main">${podcast}</a></div>
-        </td>
-        <td style="min-width:4em;padding-right:1em;text-align: center">
-            <a href="bookmarks.view?" target="main"><img src="<spring:theme code='bookmarkImage'/>" title="${bookmarks}" alt="${bookmarks}"></a>
-            <div class="topHeader"><a href="bookmarks.view?" target="main">${bookmarks}</a></div>
-        </td>
-        <c:if test="${model.user.settingsRole}">
-            <td style="min-width:3em;padding-right:1em;text-align: center">
-                <a href="settings.view?" target="main"><img src="<spring:theme code='settingsImage'/>" title="${settings}" alt="${settings}"></a>
-                <div class="topHeader"><a href="settings.view?" target="main">${settings}</a></div>
-            </td>
-        </c:if>
-        <td style="min-width:3em;padding-right:1em;text-align: center">
-            <a href="status.view?" target="main"><img src="<spring:theme code='statusImage'/>" title="${status}" alt="${status}"></a>
-            <div class="topHeader"><a href="status.view?" target="main">${status}</a></div>
-        </td>
-        <td style="min-width:3em;padding-right:1em;text-align: center">
-            <a href="more.view?" target="main"><img src="<spring:theme code='moreImage'/>" title="${more}" alt="${more}"></a>
-            <div class="topHeader"><a href="more.view?" target="main">${more}</a></div>
-        </td>
-        <td style="min-width:3em;padding-right:1em;text-align: center">
-            <a href="help.view?" target="main"><img src="<spring:theme code='helpImage'/>" title="${help}" alt="${help}"></a>
-            <div class="topHeader"><a href="help.view?" target="main">${help}</a></div>
-        </td>
+    <h1 class="logo">Booksonic</h1>
+    <nav>
+        <ul>
+            <li class="navli"><a href="home.view?" target="main" style="color: #fff;">${home}</a></li>
+        	<li class="navli"><a href="left.view?" target="main" style="color: #fff;">Authors</a></li>
+            <li class="navli"><a href="nowPlaying.view?" target="main" style="color: #fff;">${nowPlaying}</a></li>
+            <li class="navli"><a href="starred.view?" target="main" style="color: #fff;">${starred}</a></li>
+            <li class="navli"><a href="playlists.view?" target="main" style="color: #fff;">${playlists}</a></li>
+            <li class="navli"><a href="podcastChannels.view?" target="main" style="color: #fff;">${podcast}</a></li>
+            <li class="navli"><a href="bookmarks.view?" target="main" style="color: #fff;">${bookmarks}</a></li>
+			<c:if test="${model.user.settingsRole}">
+				<li class="navli"><a href="settings.view?" target="main" style="color: #fff;">${settings}</a></li>
+			</c:if>
+			<li class="navli"><a href="status.view?" target="main" style="color: #fff;">${status}</a></li>
+			<li class="navli"><a href="more.view?" target="main" style="color: #fff;">${more}</a></li>
+			<li class="navli"><a href="help.view?" target="main" style="color: #fff;">${help}</a></li>
+			<li class="navli"><a href="login.view?logout" style="color: #fff;">Logout</a></li>
+		</ul>
+	</nav>
 
-        <td style="padding-left:1em">
-            <form method="post" action="search.view" target="main" name="searchForm">
-                <td><input required type="text" name="query" id="query" size="28" placeholder="${search}" onclick="select();"
-                           onkeyup="triggerInstantSearch();"></td>
-                <td><a href="javascript:document.searchForm.submit()"><img src="<spring:theme code='searchImage'/>" alt="${search}" title="${search}"></a></td>
-            </form>
-        </td>
 
-        <td style="padding-left:15pt;padding-right:5pt;vertical-align: middle;width: 100%;text-align: center">
-            <div>
-            <c:if test="${model.user.settingsRole}">
-              <a href="personalSettings.view" target="main">
-            </c:if>
-            <c:choose>
-              <c:when test="${model.showAvatar}">
-                <sub:url value="avatar.view" var="avatarUrl">
-                  <sub:param name="username" value="${model.user.username}"/>
-                </sub:url>
-                <img src="${avatarUrl}" alt="User" width="30" height="30">
-              </c:when>
-              <c:otherwise>
-                <img src="<spring:theme code='userImage'/>" alt="User" height="24">
-              </c:otherwise>
-            </c:choose>
-            <c:if test="${model.user.settingsRole}">
-              </a>
-            </c:if>
-              <div class="topHeader">
-                <c:if test="${model.user.settingsRole}">
-                  <a href="personalSettings.view" target="main">
-                </c:if>
-                  <c:out value="${model.user.username}" escapeXml="true"/>
-                <c:if test="${model.user.settingsRole}">
-                  </a>
-                </c:if>
-              </div>
-            </div>
-        </td>
+    <div style="float: right; margin-top: 10px;">
+		<form method="post" action="search.view" target="main" name="searchForm">
+			<input required="" type="text" name="query" id="query" size="60" placeholder="Search" onclick="select();" onkeyup="triggerInstantSearch();">
+			<a href="javascript:document.searchForm.submit()"><img src="icons/default_dark/search.png" alt="Search" title="Search"></a>
+		</form>
+    </div>
 
-        <td style="padding-left:15pt;padding-right:5pt;vertical-align: right;width: 100%;text-align: center">
-            <a id="connectionStatus" href="javascript:void(0)" onclick="toggleConnectionStatus();">
-                <img src="<spring:theme code='disconnectedImage'/>" alt="connect" height="24">
-                <div class="detail">
-                    <fmt:message key="top.disconnected"></fmt:message>
-                </div>
-            </a>
-        </td>
 
-        <td style="padding-left:15pt;padding-right:5pt;vertical-align: right;width: 100%;text-align: center">
-            <a href="#" onclick="airsonicLogout();">
-                <img src="<spring:theme code='logoutImage'/>" alt="logout" height="24">
-                <div class="detail">
-                    <fmt:message key="top.logout"></fmt:message>
-                </div>
-            </a>
-        </td>
-
-    </tr></table>
     <form id="logoutForm" action="<c:url value='/logout'/>"  method="POST" style="display:none">
         <sec:csrfInput />
     </form>
