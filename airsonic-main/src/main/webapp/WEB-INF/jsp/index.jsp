@@ -67,7 +67,7 @@
 
 <body class="bgcolor2" style="height: 100%; margin: 0; overflow-y: hidden">
     <div class="entire-panel">
-        <iframe id="upper" name="upper" src="top.view?" onload='javascript:(function(o){o.style.height=o.contentWindow.document.body.scrollHeight+"px";}(this));' class="main-navigation" style="background-color:#175d7b; color: #fff; min-height: 80px;"></iframe>
+        <iframe id="upper" name="upper" src="top.view?" onload="autoResize();" class="main-navigation" style="background-color:#175d7b; color: #fff; min-height: 80px;"></iframe>
 
         <div class="lower">
             <div class="non-left-navigation-container">
@@ -83,12 +83,11 @@
        <iframe id="hidden" name="hidden" class="hidden-panel"></iframe>       
    </div>
    
-   <script>
-    $(window).on('resize', function(){
-        var top = $("#upper");
-        top.style.height=top.contentWindow.document.body.scrollHeight+"px";
-    });
-   </script>
+   <script language="javaScript">
+        function autoResize(){
+            $('#upper').height($('#upper').contents().height());
+        }
+    </script>
     
 </body>
 </html>

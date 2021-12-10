@@ -164,5 +164,13 @@
     <form id="logoutForm" action="<c:url value='/logout'/>"  method="POST" style="display:none">
         <sec:csrfInput />
     </form>
+    
+    <script language="javaScript">
+        function resize(){
+            window.parent.autoResize();
+        }
+
+        $(window).on('resize', resize);
+    </script>
 
 </body></html>
