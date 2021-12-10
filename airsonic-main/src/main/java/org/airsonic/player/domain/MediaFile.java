@@ -20,7 +20,17 @@
 package org.airsonic.player.domain;
 
 import org.apache.commons.io.FilenameUtils;
+import org.w3c.dom.Document;
+import org.xml.sax.InputSource;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -129,6 +139,63 @@ public class MediaFile {
         this.path = path;
     }
 
+    private String readFile(String path, Charset encoding) throws IOException {
+        byte[] encoded = Files.readAllBytes(Paths.get(path));
+        return new String(encoded, encoding);
+    }
+
+    public String getDescription() {
+        try {
+            String tempPath = "";
+            if (isDirectory()) {
+                tempPath = path + File.separator;
+            } else {
+                tempPath = path.substring(0,path.lastIndexOf(File.separator)) + File.separator;
+            }
+
+            String odmpath = tempPath + "metadata.odm";
+            String opfpath = tempPath + "metadata.opf";
+            String txtpath = tempPath + "desc.txt";
+
+            if (new File(odmpath).exists()) {
+                return getDescriptionFromOdm(odmpath);
+            } else if (new File(opfpath).exists()) {
+                return getDescriptionFromOpf(opfpath);
+            } else if (new File(txtpath).exists()) {
+                return getFromtxt(txtpath, "No description available");
+            } else {
+                throw new Exception("No description available");
+            }
+        } catch (Exception e) {
+            return "No description available";
+        }
+    }
+
+    private String getDescriptionFromOdm(String path) {
+        try {
+            String raw = readFile(path, StandardCharsets.UTF_8);
+            raw = raw.replace("<![CDATA[<Metadata>", "").replace("</Metadata>]]>","");
+
+            DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+            Document doc = builder.parse(new InputSource(new StringReader(raw)));
+
+            return doc.getElementsByTagName("Description").item(0).getTextContent();
+
+        } catch (Exception e) {
+            return "No description availiable";
+        }
+    }
+
+    private String getDescriptionFromOpf(String path) {
+        try {
+            File file = new File(path);
+            Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file);
+            return doc.getElementsByTagName("dc:description").item(0).getTextContent();
+        } catch (Exception e) {
+            return "No description availiable";
+        }
+    }
+
     public String getFolder() {
         return folder;
     }
@@ -141,6 +208,27 @@ public class MediaFile {
         return Paths.get(path);
     }
 
+    public String getLanguage() {
+        try {
+            String tempPath = "";
+            if (isDirectory()) {
+                tempPath = path + File.separator;
+            } else {
+                tempPath = path.substring(0,path.lastIndexOf(File.separator)) + File.separator;
+            }
+
+            String langpath = tempPath + "lang.txt";
+
+            if (new File(langpath).exists()) {
+                return getFromtxt(langpath, "Unknown");
+            } else {
+                throw new Exception("Unknown");
+            }
+        } catch (Exception e) {
+            return "Unknown";
+        }
+    }
+
     public boolean exists() {
         return Files.exists(getFile());
     }
@@ -151,6 +239,38 @@ public class MediaFile {
 
     public void setMediaType(MediaType mediaType) {
         this.mediaType = mediaType;
+    }
+
+    public String getNarrator() {
+        try {
+            String tempPath = "";
+            if (isDirectory()) {
+                tempPath = path + File.separator;
+            } else {
+                tempPath = path.substring(0,path.lastIndexOf(File.separator)) + File.separator;
+            }
+
+            String narratorpath = tempPath + "narrator.txt";
+            String readerpath = tempPath + "reader.txt";
+
+            if (new File(narratorpath).exists()) {
+                return getFromtxt(narratorpath, "Unknown");
+            } else if (new File(readerpath).exists()) {
+                return getFromtxt(readerpath, "Unknown");
+            } else {
+                throw new Exception("Unknown");
+            }
+        } catch (Exception e) {
+            return "Unknown";
+        }
+    }
+
+    private String getFromtxt(String path, String defaultValue) {
+        try {
+            return readFile(path, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return defaultValue;
+        }
     }
 
     public boolean isVideo() {

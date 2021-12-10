@@ -621,6 +621,55 @@ public class SubsonicRESTController {
         jaxbWriter.writeResponse(request, response, res);
     }
 
+    @RequestMapping("/getBookDirectory")
+    public void getBookDirectory(HttpServletRequest request, HttpServletResponse response) throws Exception {
+        request = wrapRequest(request);
+        Player player = playerService.getPlayer(request, response);
+        String username = securityService.getCurrentUsername(request);
+
+        int id = getRequiredIntParameter(request, "id");
+        MediaFile dir = mediaFileService.getMediaFile(id);
+        if (dir == null) {
+            error(request, response, ErrorCode.NOT_FOUND, "Directory not found");
+            return;
+        }
+        if (!securityService.isFolderAccessAllowed(dir, username)) {
+            error(request, response, ErrorCode.NOT_AUTHORIZED, "Access denied");
+            return;
+        }
+
+        MediaFile parent = mediaFileService.getParentOf(dir);
+        Directory directory = new Directory();
+        directory.setId(String.valueOf(id));
+        try {
+            if (!mediaFileService.isRoot(parent)) {
+                directory.setParent(String.valueOf(parent.getId()));
+            }
+        } catch (SecurityException x) {
+            // Ignored.
+        }
+        directory.setName(dir.getName());
+        directory.setStarred(jaxbWriter.convertDate(mediaFileDao.getMediaFileStarredDate(id, username)));
+        directory.setPlayCount((long) dir.getPlayCount());
+
+        directory.setDescription(dir.getDescription());
+        directory.setReader(dir.getNarrator());
+        directory.setLanguage(dir.getLanguage());
+
+        if (dir.isAlbum()) {
+            directory.setAverageRating(ratingService.getAverageRating(dir));
+            directory.setUserRating(ratingService.getRatingForUser(username, dir));
+        }
+
+        for (MediaFile child : mediaFileService.getChildrenOf(dir, true, true, true)) {
+            directory.getChild().add(createJaxbChild(player, child, username));
+        }
+
+        Response res = createResponse();
+        res.setDirectory(directory);
+        jaxbWriter.writeResponse(request, response, res);
+    }
+
     @RequestMapping("/getMusicDirectory")
     public void getMusicDirectory(HttpServletRequest request, HttpServletResponse response) throws Exception {
         request = wrapRequest(request);

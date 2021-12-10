@@ -47,6 +47,10 @@ public class Album {
     private boolean present;
     private Integer folderId;
     private String musicBrainzReleaseId;
+    private String fullPath;
+    private String description;
+    private String reader;
+    private String language;
 
     public Album() {
     }
@@ -87,6 +91,14 @@ public class Album {
 
     public void setPath(String path) {
         this.path = path;
+    }
+
+    public String getFullPath() {
+        return fullPath;
+    }
+
+    public void setFullPath(String path) {
+        this.fullPath = fullPath;
     }
 
     public String getName() {
@@ -143,6 +155,30 @@ public class Album {
 
     public void setYear(Integer year) {
         this.year = year;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getReader() {
+        return reader;
+    }
+
+    public void setReader(String reader) {
+        this.reader = reader;
+    }
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(String language) {
+        this.language = language;
     }
 
     public String getGenre() {
