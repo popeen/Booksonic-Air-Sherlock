@@ -136,7 +136,7 @@
     <nav>
         <ul>
             <li class="navli"><a href="home.view?" target="main" style="color: #fff;">${home}</a></li>
-        	<li class="navli"><a href="left.view?" target="main" style="color: #fff;">Authors</a></li>
+        	<li class="navli"><a href="left.view?" target="main" style="color: #fff;">Author</a></li>
             <li class="navli"><a href="nowPlaying.view?" target="main" style="color: #fff;">${nowPlaying}</a></li>
             <li class="navli"><a href="starred.view?" target="main" style="color: #fff;">${starred}</a></li>
             <li class="navli"><a href="playlists.view?" target="main" style="color: #fff;">${playlists}</a></li>

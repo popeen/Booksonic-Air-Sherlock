@@ -102,14 +102,7 @@
     </script>
 </head>
 
-<body class="bgcolor2 leftframe" onload="init()">
-<a name="top"></a>
-
-<div style="padding-bottom:1.5em">
-    <a href="home.view" target="main">
-      <img src="<spring:theme code='logoImage'/>" style="width:196px" title="<fmt:message key='top.help'/>" alt="">
-    </a>
-</div>
+<body class="bgcolor2 leftframe" onload="init()" style="padding:1.0em;">
 
 <c:if test="${fn:length(model.musicFolders) > 1}">
     <div style="padding-bottom:1.0em">
