@@ -116,6 +116,7 @@ public class JAXBWriter {
         Response response = new ObjectFactory().createResponse();
         response.setStatus(ok ? ResponseStatus.OK : ResponseStatus.FAILED);
         response.setVersion(restProtocolVersion);
+        response.setBooksonic(true);
         return response;
     }
 
