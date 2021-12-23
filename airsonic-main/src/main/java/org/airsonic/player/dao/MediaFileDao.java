@@ -20,10 +20,7 @@
 package org.airsonic.player.dao;
 
 import com.google.common.collect.ImmutableMap;
-import org.airsonic.player.domain.Genre;
-import org.airsonic.player.domain.MediaFile;
-import org.airsonic.player.domain.MusicFolder;
-import org.airsonic.player.domain.RandomSearchCriteria;
+import org.airsonic.player.domain.*;
 import org.airsonic.player.util.Util;
 import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
@@ -32,7 +29,19 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.w3c.dom.Document;
+import org.xml.sax.InputSource;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -51,7 +60,7 @@ public class MediaFileDao extends AbstractDao {
     private static final String INSERT_COLUMNS = "path, folder, type, format, title, album, artist, album_artist, disc_number, " +
                                                 "track_number, year, genre, bit_rate, variable_bit_rate, duration, file_size, width, height, cover_art_path, " +
                                                 "parent_path, play_count, last_played, comment, created, changed, last_scanned, children_last_updated, present, " +
-                                                "version, mb_release_id, mb_recording_id";
+                                                "version, mb_release_id, mb_recording_id, description, narrator, language";
 
     private static final String QUERY_COLUMNS = "id, " + INSERT_COLUMNS;
     private static final String GENRE_COLUMNS = "name, song_count, album_count";
@@ -168,7 +177,10 @@ public class MediaFileDao extends AbstractDao {
                      "present=?, " +
                      "version=?, " +
                      "mb_release_id=?, " +
-                     "mb_recording_id=? " +
+                     "mb_recording_id=?, " +
+                     "description=?, " +
+                     "narrator=?, " +
+                     "language=? " +
                      "where path=?";
 
         LOG.trace("Updating media file {}", Util.debugObject(file));
@@ -179,7 +191,7 @@ public class MediaFileDao extends AbstractDao {
                 file.isVariableBitRate(), file.getDuration(), file.getFileSize(), file.getWidth(), file.getHeight(),
                        file.getCoverArtPath(), file.getParentPath(), file.getPlayCount(), file.getLastPlayed(), file.getComment(),
                        file.getChanged(), file.getLastScanned(), file.getChildrenLastUpdated(), file.isPresent(), VERSION,
-                       file.getMusicBrainzReleaseId(), file.getMusicBrainzRecordingId(), file.getPath());
+                       file.getMusicBrainzReleaseId(), file.getMusicBrainzRecordingId(), getDescription(file), getNarrator(file), getLanguage(file), file.getPath());
 
         if (n == 0) {
 
@@ -197,11 +209,106 @@ public class MediaFileDao extends AbstractDao {
                    file.isVariableBitRate(), file.getDuration(), file.getFileSize(), file.getWidth(), file.getHeight(),
                    file.getCoverArtPath(), file.getParentPath(), file.getPlayCount(), file.getLastPlayed(), file.getComment(),
                    file.getCreated(), file.getChanged(), file.getLastScanned(),
-                   file.getChildrenLastUpdated(), file.isPresent(), VERSION, file.getMusicBrainzReleaseId(), file.getMusicBrainzRecordingId());
+                   file.getChildrenLastUpdated(), file.isPresent(), VERSION, file.getMusicBrainzReleaseId(), file.getMusicBrainzRecordingId(), getDescription(file), getNarrator(file), getLanguage(file));
         }
 
         int id = queryForInt("select id from media_file where path=?", null, file.getPath());
         file.setId(id);
+    }
+
+    private String readFile(String path, Charset encoding) throws IOException {
+        byte[] encoded = Files.readAllBytes(Paths.get(path));
+        return new String(encoded, encoding);
+    }
+
+    private String getNarrator(MediaFile file) {
+        try {
+            String tempPath = file.getPath() + File.separator;
+
+            String narratorpath = tempPath + "narrator.txt";
+            String readerpath = tempPath + "reader.txt";
+
+            if (new File(narratorpath).exists()) {
+                return getFromtxt(narratorpath, "Unknown");
+            } else if (new File(readerpath).exists()) {
+                return getFromtxt(readerpath, "Unknown");
+            } else {
+                throw new Exception("Unknown");
+            }
+        } catch (Exception e) {
+            return "Unknown";
+        }
+    }
+
+    private String getLanguage(MediaFile file) {
+        try {
+            String tempPath = file.getPath() + File.separator;
+
+            String langpath = tempPath + "lang.txt";
+
+            if (new File(langpath).exists()) {
+                return getFromtxt(langpath, "Unknown");
+            } else {
+                throw new Exception("Unknown");
+            }
+        } catch (Exception e) {
+            return "Unknown";
+        }
+    }
+
+    private String getDescription(MediaFile file) {
+        try {
+            String tempPath = file.getPath() + File.separator;
+
+            String odmpath = tempPath + "metadata.odm";
+            String opfpath = tempPath + "metadata.opf";
+            String txtpath = tempPath + "desc.txt";
+
+            if (new File(odmpath).exists()) {
+                return getDescriptionFromOdm(odmpath);
+            } else if (new File(opfpath).exists()) {
+                return getDescriptionFromOpf(opfpath);
+            } else if (new File(txtpath).exists()) {
+                return getFromtxt(txtpath, "No description available");
+            } else {
+                throw new Exception("No description available");
+            }
+        } catch (Exception e) {
+            return "No description available";
+        }
+    }
+
+    private String getDescriptionFromOdm(String path) {
+        try {
+            String raw = readFile(path, StandardCharsets.UTF_8);
+            raw = raw.replace("<![CDATA[<Metadata>", "").replace("</Metadata>]]>","");
+
+            DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+            Document doc = builder.parse(new InputSource(new StringReader(raw)));
+
+            return doc.getElementsByTagName("Description").item(0).getTextContent();
+
+        } catch (Exception e) {
+            return "No description availiable";
+        }
+    }
+
+    private String getDescriptionFromOpf(String path) {
+        try {
+            File file = new File(path);
+            Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file);
+            return doc.getElementsByTagName("dc:description").item(0).getTextContent();
+        } catch (Exception e) {
+            return "No description availiable";
+        }
+    }
+
+    private String getFromtxt(String path, String defaultValue) {
+        try {
+            return readFile(path, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return defaultValue;
+        }
     }
 
     private MediaFile getMusicFileInfo(String path) {
@@ -761,7 +868,10 @@ public class MediaFileDao extends AbstractDao {
                     rs.getBoolean(29),
                     rs.getInt(30),
                     rs.getString(31),
-                    rs.getString(32));
+                    rs.getString(32),
+                    rs.getString(33),
+                    rs.getString(34),
+                    rs.getString(35));
         }
     }
 
