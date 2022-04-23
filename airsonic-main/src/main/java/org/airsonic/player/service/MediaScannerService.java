@@ -23,6 +23,7 @@ import org.airsonic.player.dao.AlbumDao;
 import org.airsonic.player.dao.ArtistDao;
 import org.airsonic.player.dao.MediaFileDao;
 import org.airsonic.player.domain.*;
+import org.airsonic.player.domain.CoverArt.EntityType;
 import org.airsonic.player.service.search.IndexManager;
 import org.apache.commons.lang.ObjectUtils;
 import org.slf4j.Logger;
@@ -36,8 +37,6 @@ import org.subsonic.restapi.ScanStatus;
 import javax.annotation.PostConstruct;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
@@ -72,6 +71,10 @@ public class MediaScannerService {
     private PlaylistService playlistService;
     @Autowired
     private MediaFileService mediaFileService;
+    @Autowired
+    private MediaFolderService mediaFolderService;
+    @Autowired
+    private CoverArtService coverArtService;
     @Autowired
     private MediaFileDao mediaFileDao;
     @Autowired
@@ -133,10 +136,6 @@ public class MediaScannerService {
 
     boolean neverScanned() {
         return indexManager.getStatistics() == null;
-    }
-
-    void watchPlaylists() {
-
     }
 
     /**
@@ -206,7 +205,7 @@ public class MediaScannerService {
             Map<String, Artist> artists = new ConcurrentHashMap<>();
             Map<String, Album> albums = new ConcurrentHashMap<>();
             Map<Integer, Album> albumsInDb = new ConcurrentHashMap<>();
-            Map<String, Boolean> encountered = new ConcurrentHashMap<>();
+            Map<Integer, Set<String>> encountered = new ConcurrentHashMap<>();
             Genres genres = new Genres();
 
             scanCount.set(0);
@@ -215,16 +214,10 @@ public class MediaScannerService {
             indexManager.startIndexing();
 
             // Recurse through all files on disk.
-            settingsService.getAllMusicFolders()
+            mediaFolderService.getAllMusicFolders()
                 .parallelStream()
-                .forEach(musicFolder -> scanFile(mediaFileService.getMediaFile(musicFolder.getPath(), false), musicFolder, statistics, albumCount, artists, albums, albumsInDb, genres, encountered, false));
-
-            // Scan podcast folder.
-            Path podcastFolder = Paths.get(settingsService.getPodcastFolder());
-            if (Files.exists(podcastFolder)) {
-                scanFile(mediaFileService.getMediaFile(podcastFolder), new MusicFolder(podcastFolder, null, true, null),
-                        statistics, albumCount, artists, albums, albumsInDb, genres, encountered, true);
-            }
+                    .forEach(musicFolder -> scanFile(mediaFileService.getMediaFile(Paths.get(""), musicFolder, false),
+                            musicFolder, statistics, albumCount, artists, albums, albumsInDb, genres, encountered));
 
             LOG.info("Scanned media library with {} entries.", scanCount.get());
 
@@ -236,7 +229,10 @@ public class MediaScannerService {
             CompletableFuture<Void> albumPersistence = CompletableFuture
                     .allOf(albums.values().parallelStream()
                             .distinct()
-                            .map(a -> CompletableFuture.runAsync(() -> albumDao.createOrUpdateAlbum(a), pool))
+                            .map(a -> CompletableFuture.supplyAsync(() -> {
+                                albumDao.createOrUpdateAlbum(a);
+                                return a;
+                            }, pool).thenAcceptAsync(coverArtService::persistIfNeeded))
                             .toArray(CompletableFuture[]::new))
                     .thenRunAsync(() -> {
                         LOG.info("Marking non-present albums.");
@@ -247,7 +243,10 @@ public class MediaScannerService {
             LOG.info("Persisting artists");
             CompletableFuture<Void> artistPersistence = CompletableFuture
                     .allOf(artists.values().parallelStream()
-                            .map(a -> CompletableFuture.runAsync(() -> artistDao.createOrUpdateArtist(a), pool))
+                            .map(a -> CompletableFuture.supplyAsync(() -> {
+                                artistDao.createOrUpdateArtist(a);
+                                return a;
+                            }, pool).thenAcceptAsync(coverArtService::persistIfNeeded))
                             .toArray(CompletableFuture[]::new))
                     .thenRunAsync(() -> {
                         LOG.info("Marking non-present artists.");
@@ -257,7 +256,7 @@ public class MediaScannerService {
 
             LOG.info("Marking present files");
             CompletableFuture<Void> mediaFilePersistence = CompletableFuture
-                    .runAsync(() -> mediaFileDao.markPresent(encountered.keySet(), statistics.getScanDate()), pool)
+                    .runAsync(() -> mediaFileDao.markPresent(encountered, statistics.getScanDate()), pool)
                     .thenRunAsync(() -> {
                         LOG.info("Marking non-present files.");
                         mediaFileDao.markNonPresent(statistics.getScanDate());
@@ -292,28 +291,28 @@ public class MediaScannerService {
     }
 
     private void scanFile(MediaFile file, MusicFolder musicFolder, MediaLibraryStatistics statistics,
-                          Map<String, AtomicInteger> albumCount, Map<String, Artist> artists, Map<String, Album> albums, Map<Integer, Album> albumsInDb, Genres genres, Map<String, Boolean> encountered, boolean isPodcast) {
+            Map<String, AtomicInteger> albumCount, Map<String, Artist> artists, Map<String, Album> albums,
+            Map<Integer, Album> albumsInDb, Genres genres, Map<Integer, Set<String>> encountered) {
         if (scanCount.incrementAndGet() % 250 == 0) {
             broadcastScanStatus();
             LOG.info("Scanned media library with {} entries.", scanCount.get());
         }
 
-        LOG.trace("Scanning file {}", file.getPath());
+        LOG.trace("Scanning file {} in folder {} ({})", file.getPath(), musicFolder.getId(), musicFolder.getName());
 
-        // Update the root folder if it has changed.
-        if (!musicFolder.getPath().toString().equals(file.getFolder())) {
-            file.setFolder(musicFolder.getPath().toString());
-            mediaFileDao.createOrUpdateMediaFile(file);
+        // Update the root folder if it has changed
+        if (!musicFolder.getId().equals(file.getFolderId())) {
+            file.setFolderId(musicFolder.getId());
+            mediaFileService.updateMediaFile(file);
         }
 
-        indexManager.index(file);
+        indexManager.index(file, musicFolder);
 
         if (file.isDirectory()) {
-            mediaFileService.getChildrenOf(file, true, true, false, false)
-                .parallelStream()
-                .forEach(child -> scanFile(child, musicFolder, statistics, albumCount, artists, albums, albumsInDb, genres, encountered, isPodcast));
+            mediaFileService.getChildrenOf(file, true, true, false, false).parallelStream()
+                    .forEach(child -> scanFile(child, musicFolder, statistics, albumCount, artists, albums, albumsInDb, genres, encountered));
         } else {
-            if (!isPodcast) {
+            if (musicFolder.getType() == MusicFolder.Type.MEDIA) {
                 updateAlbum(file, musicFolder, statistics.getScanDate(), albumCount, albums, albumsInDb);
                 updateArtist(file, musicFolder, statistics.getScanDate(), albumCount, artists);
             }
@@ -321,7 +320,7 @@ public class MediaScannerService {
         }
 
         updateGenres(file, genres);
-        encountered.putIfAbsent(file.getPath(), Boolean.TRUE);
+        encountered.computeIfAbsent(file.getFolderId(), k -> ConcurrentHashMap.newKeySet()).add(file.getPath());
 
         if (file.getDuration() != null) {
             statistics.incrementTotalDurationInSeconds(file.getDuration());
@@ -354,7 +353,7 @@ public class MediaScannerService {
             Album a = v;
 
             if (a == null) {
-                Album dbAlbum = albumDao.getAlbumForFile(file);
+                Album dbAlbum = albumDao.getAlbum(artist, file.getAlbumName());
                 if (dbAlbum != null) {
                     a = albumsInDb.computeIfAbsent(dbAlbum.getId(), aid -> {
                         // reset stats when first retrieve from the db for new scan
@@ -397,9 +396,15 @@ public class MediaScannerService {
         if (file.getGenre() != null) {
             album.setGenre(file.getGenre());
         }
-        MediaFile parent = mediaFileService.getParentOf(file);
-        if (parent != null && parent.getCoverArtPath() != null) {
-            album.setCoverArtPath(parent.getCoverArtPath());
+
+        if (album.getArt() == null) {
+            MediaFile parent = mediaFileService.getParentOf(file, true); // true because the parent has recently already been scanned
+            if (parent != null) {
+                CoverArt art = coverArtService.get(EntityType.MEDIA_FILE, parent.getId());
+                if (!CoverArt.NULL_ART.equals(art)) {
+                    album.setArt(new CoverArt(-1, EntityType.ALBUM, art.getPath(), art.getFolderId(), false));
+                }
+            }
         }
 
         if (firstEncounter.get()) {
@@ -411,7 +416,7 @@ public class MediaScannerService {
         // Update the file's album artist, if necessary.
         if (!ObjectUtils.equals(album.getArtist(), file.getAlbumArtist())) {
             file.setAlbumArtist(album.getArtist());
-            mediaFileDao.createOrUpdateMediaFile(file);
+            mediaFileService.updateMediaFile(file);
         }
     }
 
@@ -445,10 +450,13 @@ public class MediaScannerService {
             return a;
         });
 
-        if (artist.getCoverArtPath() == null) {
-            MediaFile parent = mediaFileService.getParentOf(file);
+        if (artist.getArt() == null) {
+            MediaFile parent = mediaFileService.getParentOf(file, true); // true because the parent has recently already been scanned
             if (parent != null) {
-                artist.setCoverArtPath(parent.getCoverArtPath());
+                CoverArt art = coverArtService.get(EntityType.MEDIA_FILE, parent.getId());
+                if (!CoverArt.NULL_ART.equals(art)) {
+                    artist.setArt(new CoverArt(-1, EntityType.ARTIST, art.getPath(), art.getFolderId(), false));
+                }
             }
         }
 

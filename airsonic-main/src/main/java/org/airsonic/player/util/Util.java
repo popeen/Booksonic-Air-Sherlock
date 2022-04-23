@@ -23,6 +23,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.google.common.primitives.Ints;
 import org.apache.commons.lang3.SystemUtils;
 import org.slf4j.Logger;
@@ -30,9 +31,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import javax.validation.ConstraintViolation;
 import javax.validation.Validation;
 import javax.validation.Validator;
@@ -78,39 +77,11 @@ public final class Util {
         return SystemUtils.IS_OS_WINDOWS;
     }
 
-    /**
-     * Similar to {@link ServletResponse#setContentLength(int)}, but this
-     * method supports lengths bigger than 2GB.
-     * <p/>
-     * See http://blogger.ziesemer.com/2008/03/suns-version-of-640k-2gb.html
-     *
-     * @param response The HTTP response.
-     * @param length   The content length.
-     */
-    public static void setContentLength(HttpServletResponse response, long length) {
-        if (length <= Integer.MAX_VALUE) {
-            response.setContentLength((int) length);
-        } else {
-            response.setHeader("Content-Length", String.valueOf(length));
-        }
-    }
-
     public static <T> List<T> subList(List<T> list, long offset, long max) {
         if (list.size() == Integer.MAX_VALUE) {
             return list.stream().skip(offset).limit(max).collect(toList());
         }
         return list.subList(Math.min(list.size(), Ints.saturatedCast(offset)), Math.min(list.size(), Ints.saturatedCast(offset + max)));
-    }
-
-    public static List<Integer> toIntegerList(int[] values) {
-        if (values == null) {
-            return Collections.emptyList();
-        }
-        List<Integer> result = new ArrayList<Integer>(values.length);
-        for (int value : values) {
-            result.add(value);
-        }
-        return result;
     }
 
     public static int[] toIntArray(List<Integer> values) {
@@ -191,6 +162,14 @@ public final class Util {
     public static String toJson(Object object) {
         try {
             return objectMapper.writeValueAsString(object);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public static String toJson(Object object, SerializationFeature feature) {
+        try {
+            return objectMapper.writer(feature).writeValueAsString(object);
         } catch (Exception e) {
             return null;
         }

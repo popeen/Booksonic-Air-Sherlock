@@ -21,4 +21,8 @@
     <include file="add-wavpack.xml" relativeToChangelogFile="true"/>
     <include file="postgresql-add-rand-function.xml" relativeToChangelogFile="true"/>
     <include file="podcast-episode-guid.xml" relativeToChangelogFile="true"/>
+    <include file="relative-media-file-paths.xml" relativeToChangelogFile="true"/>
+    <include file="cover-art-table.xml" relativeToChangelogFile="true"/>
+    <include file="media-file-music-folder-link.xml" relativeToChangelogFile="true"/>
+    <include file="delete-first-player.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

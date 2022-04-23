@@ -20,18 +20,22 @@
 package org.airsonic.player.service.metadata;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import org.airsonic.player.domain.MediaFile;
+import org.airsonic.player.service.MediaFolderService;
 import org.airsonic.player.service.SettingsService;
 import org.airsonic.player.service.TranscodingService;
+import org.airsonic.player.util.Util;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedInputStream;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -51,7 +55,6 @@ import java.util.Optional;
 public class FFmpegParser extends MetaDataParser {
 
     private static final Logger LOG = LoggerFactory.getLogger(FFmpegParser.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final String[] FFPROBE_OPTIONS = {
         "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams"
     };
@@ -59,7 +62,7 @@ public class FFmpegParser extends MetaDataParser {
     @Autowired
     private TranscodingService transcodingService;
     @Autowired
-    private SettingsService settingsService;
+    private MediaFolderService mediaFolderService;
 
     /**
      * Parses meta data for the given music file. No guessing or reformatting is done.
@@ -75,7 +78,7 @@ public class FFmpegParser extends MetaDataParser {
 
         try {
             // Use `ffprobe` in the transcode directory if it exists, otherwise let the system sort it out.
-            String ffprobe = SettingsService.resolveTranscodeExecutable("ffprobe");
+            String ffprobe = SettingsService.resolveTranscodeExecutable("ffprobe", "ffprobe");
 
             List<String> command = new ArrayList<>();
             command.add(ffprobe);
@@ -83,7 +86,10 @@ public class FFmpegParser extends MetaDataParser {
             command.add(file.toAbsolutePath().toString());
 
             Process process = Runtime.getRuntime().exec(command.toArray(new String[0]));
-            final JsonNode result = objectMapper.readTree(process.getInputStream());
+            JsonNode result = null;
+            try (InputStream in = process.getInputStream(); BufferedInputStream bin = new BufferedInputStream(in);) {
+                result = Util.getObjectMapper().readTree(bin);
+            }
 
             metaData.setDuration(result.at("/format/duration").asDouble());
             // Bitrate is in Kb/s
@@ -96,13 +102,13 @@ public class FFmpegParser extends MetaDataParser {
             metaData.setTitle(getData(result, "title"));
 
             String data = getData(result, "track");
-            if (data != null) {
-                metaData.setTrackNumber(Integer.valueOf(data));
+            if (NumberUtils.isCreatable(data)) {
+                metaData.setTrackNumber(NumberUtils.createInteger(data));
             }
 
             data = getData(result, "date");
-            if (data != null) {
-                metaData.setYear(Integer.valueOf(data));
+            if (NumberUtils.isCreatable(data)) {
+                metaData.setYear(NumberUtils.createInteger(data));
             }
 
             // Find the first (if any) stream that has dimensions and use those.
@@ -162,11 +168,6 @@ public class FFmpegParser extends MetaDataParser {
         return false;
     }
 
-    @Override
-    SettingsService getSettingsService() {
-        return settingsService;
-    }
-
     /**
      * Returns whether this parser is applicable to the given file.
      *
@@ -182,7 +183,8 @@ public class FFmpegParser extends MetaDataParser {
         this.transcodingService = transcodingService;
     }
 
-    public void setSettingsService(SettingsService settingsService) {
-        this.settingsService = settingsService;
+    @Override
+    MediaFolderService getMediaFolderService() {
+        return mediaFolderService;
     }
 }

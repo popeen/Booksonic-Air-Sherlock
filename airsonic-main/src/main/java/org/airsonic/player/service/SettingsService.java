@@ -19,11 +19,12 @@
  */
 package org.airsonic.player.service;
 
-import com.google.common.io.MoreFiles;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.RateLimiter;
 import org.airsonic.player.dao.AvatarDao;
 import org.airsonic.player.dao.InternetRadioDao;
-import org.airsonic.player.dao.MusicFolderDao;
 import org.airsonic.player.dao.UserDao;
 import org.airsonic.player.domain.*;
 import org.airsonic.player.service.sonos.SonosServiceRegistration;
@@ -51,11 +52,11 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 
 /**
  * Provides persistent storage of application settings and preferences.
@@ -86,6 +87,7 @@ public class SettingsService {
     private static final String KEY_WELCOME_SUBTITLE = "WelcomeSubtitle";
     private static final String KEY_WELCOME_MESSAGE = "WelcomeMessage2";
     private static final String KEY_LOGIN_MESSAGE = "LoginMessage";
+    private static final String KEY_SESSION_DURATION = "server.servlet.session.timeout";
     private static final String KEY_LOCALE_LANGUAGE = "LocaleLanguage";
     private static final String KEY_LOCALE_COUNTRY = "LocaleCountry";
     private static final String KEY_LOCALE_VARIANT = "LocaleVariant";
@@ -122,6 +124,7 @@ public class SettingsService {
     private static final String KEY_SORT_ALBUMS_BY_YEAR = "SortAlbumsByYear";
     private static final String KEY_DLNA_ENABLED = "DlnaEnabled";
     private static final String KEY_DLNA_SERVER_NAME = "DlnaServerName";
+    private static final String KEY_DLNA_SERVER_ID = "DlnaServerId";
     private static final String KEY_DLNA_BASE_LAN_URL = "DlnaBaseLANURL";
     private static final String KEY_UPNP_PORT = "UPnpPort";
     private static final String KEY_SONOS_ENABLED = "SonosEnabled";
@@ -160,7 +163,7 @@ public class SettingsService {
     private static final String KEY_DATABASE_MIGRATION_ROLLBACK_FILE = "spring.liquibase.rollback-file";
     private static final String KEY_DATABASE_MIGRATION_PARAMETER_MYSQL_VARCHAR_MAXLENGTH = "spring.liquibase.parameters.mysqlVarcharLimit";
     private static final String KEY_DATABASE_MIGRATION_PARAMETER_DEFAULT_MUSIC_FOLDER = "spring.liquibase.parameters.defaultMusicFolder";
-
+    private static final String KEY_DATABASE_MIGRATION_PARAMETER_DEFAULT_PODCAST_FOLDER = "spring.liquibase.parameters.defaultPodcastFolder";
     public static final String KEY_PROPERTIES_FILE_RETAIN_OBSOLETE_KEYS = "PropertiesFileRetainObsoleteKeys";
 
     // Default values.
@@ -188,6 +191,7 @@ public class SettingsService {
             "\\\\ \\\\\n" +
             "To change or remove this message, log in with administrator rights and go to <a href='settings.view'>Settings</a> > <a href='generalSettings.view'>General</a>.";
     private static final String DEFAULT_LOGIN_MESSAGE = null;
+    private static final String DEFAULT_SESSION_TIMEOUT_DURATION = "30m";
     private static final String DEFAULT_LOCALE_LANGUAGE = "en";
     private static final String DEFAULT_LOCALE_COUNTRY = "";
     private static final String DEFAULT_LOCALE_VARIANT = "";
@@ -202,7 +206,6 @@ public class SettingsService {
     private static final int DEFAULT_DB_BACKUP_INTERVAL = -1;
     private static final int DEFAULT_DB_BACKUP_RETENTION_COUNT = 2;
     private static final int DEFAULT_PODCAST_UPDATE_INTERVAL = 24;
-    private static final String DEFAULT_PODCAST_FOLDER = Util.getDefaultPodcastFolder();
     private static final int DEFAULT_PODCAST_EPISODE_RETENTION_COUNT = 10;
     private static final int DEFAULT_PODCAST_EPISODE_DOWNLOAD_COUNT = 1;
     private static final long DEFAULT_DOWNLOAD_BITRATE_LIMIT = 0;
@@ -224,6 +227,7 @@ public class SettingsService {
     private static final boolean DEFAULT_SORT_ALBUMS_BY_YEAR = true;
     private static final boolean DEFAULT_DLNA_ENABLED = false;
     private static final String DEFAULT_DLNA_SERVER_NAME = "Airsonic";
+    private static final String DEFAULT_DLNA_SERVER_ID = null;
     private static final String DEFAULT_DLNA_BASE_LAN_URL = null;
     private static final int DEFAULT_UPNP_PORT = 4041;
     private static final boolean DEFAULT_SONOS_ENABLED = false;
@@ -265,22 +269,11 @@ public class SettingsService {
     @Autowired
     private InternetRadioDao internetRadioDao;
     @Autowired
-    private MusicFolderDao musicFolderDao;
-    @Autowired
     private UserDao userDao;
     @Autowired
     private AvatarDao avatarDao;
     @Autowired
     private Environment env;
-
-    private Set<String> cachedCoverArtFileTypes;
-    private Set<String> cachedMusicFileTypes;
-    private Set<String> cachedVideoFileTypes;
-    private List<MusicFolder> cachedMusicFolders;
-    private final ConcurrentMap<String, List<MusicFolder>> cachedMusicFoldersPerUser = new ConcurrentHashMap<>();
-    private RateLimiter downloadRateLimiter;
-    private RateLimiter uploadRateLimiter;
-    private Pattern excludePattern;
 
     // Array of obsolete properties. Used to clean property file.
     private static final List<String> OBSOLETE_KEYS = Arrays.asList("PortForwardingPublicPort", "PortForwardingLocalPort",
@@ -314,6 +307,8 @@ public class SettingsService {
 
         keyMaps.put("database.varchar.maxlength", "DatabaseMysqlMaxlength");
         keyMaps.put("DatabaseMysqlMaxlength", KEY_DATABASE_MIGRATION_PARAMETER_MYSQL_VARCHAR_MAXLENGTH);
+
+        keyMaps.put(KEY_PODCAST_FOLDER, KEY_DATABASE_MIGRATION_PARAMETER_DEFAULT_PODCAST_FOLDER);
 
         keyMaps.put("airsonic.rememberMeKey", KEY_REMEMBER_ME_KEY);
         keyMaps.put("IgnoreFileTimestamps", KEY_FULL_SCAN);
@@ -387,6 +382,9 @@ public class SettingsService {
         if (StringUtils.isBlank(env.getProperty(KEY_DATABASE_MIGRATION_PARAMETER_DEFAULT_MUSIC_FOLDER))) {
             defaultConstants.put(KEY_DATABASE_MIGRATION_PARAMETER_DEFAULT_MUSIC_FOLDER, Util.getDefaultMusicFolder());
         }
+        if (StringUtils.isBlank(env.getProperty(KEY_DATABASE_MIGRATION_PARAMETER_DEFAULT_PODCAST_FOLDER))) {
+            defaultConstants.put(KEY_DATABASE_MIGRATION_PARAMETER_DEFAULT_PODCAST_FOLDER, Util.getDefaultPodcastFolder());
+        }
         if (StringUtils.isBlank(env.getProperty(LogFile.FILE_NAME_PROPERTY))) {
             defaultConstants.put(LogFile.FILE_NAME_PROPERTY, getDefaultLogFile());
         }
@@ -425,16 +423,41 @@ public class SettingsService {
         return dir;
     }
 
-    public static boolean isTranscodeExecutableInstalled(String executable) {
-        try (Stream<Path> files = Files.list(getTranscodeDirectory())) {
-            return files.anyMatch(p -> MoreFiles.getNameWithoutExtension(p).equals(executable));
+    private static boolean isExecutableInstalled(String executable) {
+        Process process = null;
+        try {
+            process = new ProcessBuilder(executable).start();
+            LOG.debug("{} exists and can be executed. Last executed {}", executable, process.info().startInstant());
+            return true;
         } catch (IOException e) {
+            LOG.debug("{} cannot be executed", executable, e);
             return false;
+        } finally {
+            if (process != null) {
+                process.destroy();
+            }
         }
     }
 
-    public static String resolveTranscodeExecutable(String executable) {
-        return isTranscodeExecutableInstalled(executable) ? getTranscodeDirectory().resolve(executable).toString() : executable;
+    private static LoadingCache<String, String> transcodeExecutableCache = CacheBuilder.newBuilder()
+        .expireAfterAccess(8, TimeUnit.HOURS)
+        .build(new CacheLoader<String, String>() {
+            @Override
+            public String load(String executable) throws Exception {
+                    return Arrays.asList(getTranscodeDirectory().resolve(executable).toString(), executable)
+                        .stream()
+                        .filter(SettingsService::isExecutableInstalled)
+                        .findFirst()
+                        .orElseThrow();
+            }
+        });
+
+    public static String resolveTranscodeExecutable(String executable, String defaultValue) {
+        try {
+            return transcodeExecutableCache.get(executable);
+        } catch (Exception e) {
+            return defaultValue;
+        }
     }
 
     private static String getFileSystemAppName() {
@@ -505,8 +528,24 @@ public class SettingsService {
         return getAirsonicHome().resolve(getFileSystemAppName() + ".properties");
     }
 
+    private Map<String, Object> settingsCache = new ConcurrentHashMap<>();
+    // exists for secondary derived objects based on objects in properties.
+    // Can't be stored with settingsCache because ConcurrentHashMaps cannot recursively update values.
+    // Example: Retrieving KEY_DERIVATIVE: If absent, retrieve KEY to derive object from. If KEY in turn is also absent: look up in env.
+    // Then store KEY first, then KEY_DERIVATIVE. So one lookup ends up modifying another part of ConcurrentHashMap which is illegal by contract.
+    private Map<String, Object> derivativeSettingsCache = new ConcurrentHashMap<>();
+
+    private void setProperty(String key, Object value) {
+        if (value == null) {
+            ConfigurationPropertiesService.getInstance().clearProperty(key);
+        } else {
+            ConfigurationPropertiesService.getInstance().setProperty(key, value);
+        }
+        settingsCache.remove(key);
+    }
+
     private int getInt(String key, int defaultValue) {
-        return env.getProperty(key, int.class, defaultValue);
+        return (int) settingsCache.computeIfAbsent(key, k -> env.getProperty(k, int.class, defaultValue));
     }
 
     private void setInt(String key, Integer value) {
@@ -514,7 +553,7 @@ public class SettingsService {
     }
 
     private long getLong(String key, long defaultValue) {
-        return env.getProperty(key, long.class, defaultValue);
+        return (long) settingsCache.computeIfAbsent(key, k -> env.getProperty(k, long.class, defaultValue));
     }
 
     private void setLong(String key, Long value) {
@@ -522,7 +561,7 @@ public class SettingsService {
     }
 
     private boolean getBoolean(String key, boolean defaultValue) {
-        return env.getProperty(key, boolean.class, defaultValue);
+        return (boolean) settingsCache.computeIfAbsent(key, k -> env.getProperty(k, boolean.class, defaultValue));
     }
 
     private void setBoolean(String key, Boolean value) {
@@ -537,12 +576,12 @@ public class SettingsService {
         setProperty(key, value);
     }
 
-    public String getIndexString() {
-        return getProperty(KEY_INDEX_STRING, DEFAULT_INDEX_STRING);
+    private String getProperty(String key, String defaultValue) {
+        return (String) settingsCache.computeIfAbsent(key, k -> env.getProperty(k, defaultValue));
     }
 
-    private String getProperty(String key, String defaultValue) {
-        return env.getProperty(key, defaultValue);
+    public String getIndexString() {
+        return getProperty(KEY_INDEX_STRING, DEFAULT_INDEX_STRING);
     }
 
     public void setIndexString(String indexString) {
@@ -554,11 +593,12 @@ public class SettingsService {
     }
 
     String[] getIgnoredArticlesAsArray() {
-        return getIgnoredArticles().split("\\s+");
+        return (String[]) derivativeSettingsCache.computeIfAbsent(KEY_IGNORED_ARTICLES, k -> getIgnoredArticles().split("\\s+"));
     }
 
     public void setIgnoredArticles(String ignoredArticles) {
         setProperty(KEY_IGNORED_ARTICLES, ignoredArticles);
+        derivativeSettingsCache.remove(KEY_IGNORED_ARTICLES);
     }
 
     public String getUploadsFolder() {
@@ -569,21 +609,22 @@ public class SettingsService {
         setProperty(KEY_UPLOADS_FOLDER, uploadsFolder);
     }
 
-    public String resolveContextualString(String s, String username) {
+    public Map<String, Object> buildSpelContext() {
+        Map<String, Object> context = new HashMap<>();
+        context.put("AIRSONIC_HOME", getAirsonicHome());
+        context.put("DEFAULT_PLAYLIST_FOLDER", getPlaylistFolder());
+        context.put("DEFAULT_MUSIC_FOLDER", Util.getDefaultMusicFolder());
+        return context;
+    }
+
+    public String resolveContextualString(String s, Supplier<Map<String, Object>> contextSupplier) {
         String[] contextuals = StringUtils.substringsBetween(s, "%{", "}");
         if (contextuals == null || contextuals.length == 0) {
             // if no context eval is needed, then short-circuit
             return s;
         }
-        Map<String, Object> context = new HashMap<>();
-        context.put("AIRSONIC_HOME", getAirsonicHome());
-        context.put("DEFAULT_PLAYLIST_FOLDER", getPlaylistFolder());
-        context.put("DEFAULT_MUSIC_FOLDER", Util.getDefaultMusicFolder());
-        if (StringUtils.isNotEmpty(username)) {
-            context.put("USER_NAME", username);
-            context.put("USER_MUSIC_FOLDERS", getMusicFoldersForUser(username).stream().map(MusicFolder::getPath).map(Path::toString).collect(Collectors.toList()));
-        }
 
+        Map<String, Object> context = contextSupplier.get();
         // StandardEvaluationContext spelCtx = new StandardEvaluationContext(context);
 
         return StringUtils.replaceEach(s,
@@ -627,13 +668,13 @@ public class SettingsService {
 
     public void setMusicFileTypes(String fileTypes) {
         setProperty(KEY_MUSIC_FILE_TYPES, fileTypes);
+        derivativeSettingsCache.remove(KEY_MUSIC_FILE_TYPES);
     }
 
+    @SuppressWarnings("unchecked")
     public Set<String> getMusicFileTypesSet() {
-        if (cachedMusicFileTypes == null) {
-            cachedMusicFileTypes = splitLowerString(getMusicFileTypes(), " ");
-        }
-        return cachedMusicFileTypes;
+        return (Set<String>) derivativeSettingsCache.computeIfAbsent(KEY_MUSIC_FILE_TYPES,
+            k -> splitLowerString(getMusicFileTypes(), " "));
     }
 
     public String getVideoFileTypes() {
@@ -642,13 +683,13 @@ public class SettingsService {
 
     public void setVideoFileTypes(String fileTypes) {
         setProperty(KEY_VIDEO_FILE_TYPES, fileTypes);
+        derivativeSettingsCache.remove(KEY_VIDEO_FILE_TYPES);
     }
 
+    @SuppressWarnings("unchecked")
     public Set<String> getVideoFileTypesSet() {
-        if (cachedVideoFileTypes == null) {
-            cachedVideoFileTypes = splitLowerString(getVideoFileTypes(), " ");
-        }
-        return cachedVideoFileTypes;
+        return (Set<String>) derivativeSettingsCache.computeIfAbsent(KEY_VIDEO_FILE_TYPES,
+            k -> splitLowerString(getVideoFileTypes(), " "));
     }
 
     public String getCoverArtFileTypes() {
@@ -657,13 +698,13 @@ public class SettingsService {
 
     public void setCoverArtFileTypes(String fileTypes) {
         setProperty(KEY_COVER_ART_FILE_TYPES, fileTypes);
+        derivativeSettingsCache.remove(KEY_COVER_ART_FILE_TYPES);
     }
 
+    @SuppressWarnings("unchecked")
     Set<String> getCoverArtFileTypesSet() {
-        if (cachedCoverArtFileTypes == null) {
-            cachedCoverArtFileTypes = splitLowerString(getCoverArtFileTypes(), " ");
-        }
-        return cachedCoverArtFileTypes;
+        return (Set<String>) derivativeSettingsCache.computeIfAbsent(KEY_COVER_ART_FILE_TYPES,
+            k -> splitLowerString(getCoverArtFileTypes(), " "));
     }
 
     public CoverArtSource getCoverArtSource() {
@@ -724,6 +765,14 @@ public class SettingsService {
 
     public void setLoginMessage(String message) {
         setProperty(KEY_LOGIN_MESSAGE, message);
+    }
+
+    public String getSessionDuration() {
+        return getProperty(KEY_SESSION_DURATION, DEFAULT_SESSION_TIMEOUT_DURATION);
+    }
+
+    public void setSessionDuration(String sessionTimeout) {
+        setProperty(KEY_SESSION_DURATION, sessionTimeout);
     }
 
     /**
@@ -857,20 +906,6 @@ public class SettingsService {
     }
 
     /**
-     * Returns the Podcast download folder.
-     */
-    public String getPodcastFolder() {
-        return getProperty(KEY_PODCAST_FOLDER, DEFAULT_PODCAST_FOLDER);
-    }
-
-    /**
-     * Sets the Podcast download folder.
-     */
-    public void setPodcastFolder(String folder) {
-        setProperty(KEY_PODCAST_FOLDER, folder);
-    }
-
-    /**
      * @return The download bitrate limit in Kbit/s. Zero if unlimited.
      */
     public long getDownloadBitrateLimit() {
@@ -878,10 +913,8 @@ public class SettingsService {
     }
 
     public RateLimiter getDownloadBitrateLimiter() {
-        if (downloadRateLimiter == null) {
-            downloadRateLimiter = RateLimiter.create(adjustBitrateLimit(getDownloadBitrateLimit()));
-        }
-        return downloadRateLimiter;
+        return (RateLimiter) derivativeSettingsCache.computeIfAbsent(KEY_DOWNLOAD_BITRATE_LIMIT,
+            k -> RateLimiter.create(adjustBitrateLimit(getDownloadBitrateLimit())));
     }
 
     /**
@@ -912,10 +945,8 @@ public class SettingsService {
     }
 
     public RateLimiter getUploadBitrateLimiter() {
-        if (uploadRateLimiter == null) {
-            uploadRateLimiter = RateLimiter.create(adjustBitrateLimit(getUploadBitrateLimit()));
-        }
-        return uploadRateLimiter;
+        return (RateLimiter) derivativeSettingsCache.computeIfAbsent(KEY_UPLOAD_BITRATE_LIMIT,
+            k -> RateLimiter.create(adjustBitrateLimit(getUploadBitrateLimit())));
     }
 
     /**
@@ -1067,22 +1098,13 @@ public class SettingsService {
 
     public void setExcludePatternString(String s) {
         setString(KEY_EXCLUDE_PATTERN_STRING, s);
-        compileExcludePattern();
+        derivativeSettingsCache.remove(KEY_EXCLUDE_PATTERN_STRING);
     }
 
-    private void compileExcludePattern() {
-        if (getExcludePatternString() != null && !getExcludePatternString().trim().isEmpty()) {
-            excludePattern = Pattern.compile(getExcludePatternString());
-        } else {
-            excludePattern = null;
-        }
-    }
-
+    @SuppressWarnings("unchecked")
     public Pattern getExcludePattern() {
-        if (excludePattern == null && getExcludePatternString() != null) {
-            compileExcludePattern();
-        }
-        return excludePattern;
+        return ((Optional<Pattern>) derivativeSettingsCache.computeIfAbsent(KEY_EXCLUDE_PATTERN_STRING,
+            k -> Optional.ofNullable(getExcludePatternString()).map(StringUtils::trimToNull).map(Pattern::compile))).orElse(null);
     }
 
     /**
@@ -1205,131 +1227,6 @@ public class SettingsService {
      */
     public String getBrand() {
         return "Airsonic";
-    }
-
-    /**
-     * Returns all music folders. Non-existing and disabled folders are not included.
-     *
-     * @return Possibly empty list of all music folders.
-     */
-    public List<MusicFolder> getAllMusicFolders() {
-        return getAllMusicFolders(false, false);
-    }
-
-    /**
-     * Returns all music folders.
-     *
-     * @param includeDisabled    Whether to include disabled folders.
-     * @param includeNonExisting Whether to include non-existing folders.
-     * @return Possibly empty list of all music folders.
-     */
-    public List<MusicFolder> getAllMusicFolders(boolean includeDisabled, boolean includeNonExisting) {
-        if (cachedMusicFolders == null) {
-            cachedMusicFolders = musicFolderDao.getAllMusicFolders();
-        }
-
-        return cachedMusicFolders.parallelStream()
-                .filter(folder -> (includeDisabled || folder.isEnabled()) && (includeNonExisting || Files.exists(folder.getPath())))
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Returns all music folders a user have access to. Non-existing and disabled folders are not included.
-     *
-     * @return Possibly empty list of music folders.
-     */
-    public List<MusicFolder> getMusicFoldersForUser(String username) {
-        List<MusicFolder> result = cachedMusicFoldersPerUser.get(username);
-        if (result == null) {
-            result = musicFolderDao.getMusicFoldersForUser(username);
-            result.retainAll(getAllMusicFolders(false, false));
-            cachedMusicFoldersPerUser.put(username, result);
-        }
-        return result;
-    }
-
-    /**
-     * Returns all music folders a user have access to. Non-existing and disabled folders are not included.
-     *
-     * @param selectedMusicFolderId If non-null and included in the list of allowed music folders, this methods returns
-     *                              a list of only this music folder.
-     * @return Possibly empty list of music folders.
-     */
-    public List<MusicFolder> getMusicFoldersForUser(String username, Integer selectedMusicFolderId) {
-        List<MusicFolder> allowed = getMusicFoldersForUser(username);
-        if (selectedMusicFolderId == null) {
-            return allowed;
-        }
-        MusicFolder selected = getMusicFolderById(selectedMusicFolderId);
-        return allowed.contains(selected) ? Collections.singletonList(selected) : Collections.emptyList();
-    }
-
-    /**
-     * Returns the selected music folder for a given user, or {@code null} if all music folders should be displayed.
-     */
-    public MusicFolder getSelectedMusicFolder(String username) {
-        UserSettings settings = getUserSettings(username);
-        int musicFolderId = settings.getSelectedMusicFolderId();
-
-        MusicFolder musicFolder = getMusicFolderById(musicFolderId);
-        List<MusicFolder> allowedMusicFolders = getMusicFoldersForUser(username);
-        return allowedMusicFolders.contains(musicFolder) ? musicFolder : null;
-    }
-
-    public void setMusicFoldersForUser(String username, List<Integer> musicFolderIds) {
-        musicFolderDao.setMusicFoldersForUser(username, musicFolderIds);
-        cachedMusicFoldersPerUser.remove(username);
-    }
-
-    /**
-     * Returns the music folder with the given ID.
-     *
-     * @param id The ID.
-     * @return The music folder with the given ID, or <code>null</code> if not found.
-     */
-    public MusicFolder getMusicFolderById(Integer id) {
-        List<MusicFolder> all = getAllMusicFolders();
-        for (MusicFolder folder : all) {
-            if (id.equals(folder.getId())) {
-                return folder;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Creates a new music folder.
-     *
-     * @param musicFolder The music folder to create.
-     */
-    public void createMusicFolder(MusicFolder musicFolder) {
-        musicFolderDao.createMusicFolder(musicFolder);
-        clearMusicFolderCache();
-    }
-
-    /**
-     * Deletes the music folder with the given ID.
-     *
-     * @param id The ID of the music folder to delete.
-     */
-    public void deleteMusicFolder(Integer id) {
-        musicFolderDao.deleteMusicFolder(id);
-        clearMusicFolderCache();
-    }
-
-    /**
-     * Updates the given music folder.
-     *
-     * @param musicFolder The music folder to update.
-     */
-    public void updateMusicFolder(MusicFolder musicFolder) {
-        musicFolderDao.updateMusicFolder(musicFolder);
-        clearMusicFolderCache();
-    }
-
-    public void clearMusicFolderCache() {
-        cachedMusicFolders = null;
-        cachedMusicFoldersPerUser.clear();
     }
 
     /**
@@ -1498,6 +1395,14 @@ public class SettingsService {
         setString(KEY_DLNA_SERVER_NAME, dlnaServerName);
     }
 
+    public String getDlnaServerId() {
+        return getString(KEY_DLNA_SERVER_ID, DEFAULT_DLNA_SERVER_ID); // default is null
+    }
+
+    public void setDlnaServerId(String dlnaServerId) {
+        setString(KEY_DLNA_SERVER_ID, dlnaServerId);
+    }
+
     public String getDlnaBaseLANURL() {
         return getString(KEY_DLNA_BASE_LAN_URL, DEFAULT_DLNA_BASE_LAN_URL);
     }
@@ -1546,14 +1451,6 @@ public class SettingsService {
         setString(KEY_SONOS_CALLBACK_HOST_ADDRESS, hostAddress);
     }
 
-    private void setProperty(String key, Object value) {
-        if (value == null) {
-            ConfigurationPropertiesService.getInstance().clearProperty(key);
-        } else {
-            ConfigurationPropertiesService.getInstance().setProperty(key, value);
-        }
-    }
-
     private static Set<String> splitLowerString(String s, String splitter) {
         //serial stream and linkedhashset because order matters
         return Stream.of(s.split(splitter)).filter(x -> StringUtils.isNotBlank(x)).map(x -> x.toLowerCase()).collect(Collectors.toCollection(LinkedHashSet::new));
@@ -1561,10 +1458,6 @@ public class SettingsService {
 
     public void setInternetRadioDao(InternetRadioDao internetRadioDao) {
         this.internetRadioDao = internetRadioDao;
-    }
-
-    public void setMusicFolderDao(MusicFolderDao musicFolderDao) {
-        this.musicFolderDao = musicFolderDao;
     }
 
     public void setUserDao(UserDao userDao) {
