@@ -7,6 +7,56 @@
     <%@ include file="table.jsp" %>
     <script type="text/javascript" src="<c:url value='/script/jquery.fancyzoom.js'/>"></script>
     <script type="text/javascript" src="<c:url value='/script/utils.js'/>"></script>
+    <link rel="stylesheet" href="https://pro.fontawesome.com/releases/v5.10.0/css/all.css" integrity="sha384-AYmEC3Yw5cVb3ZcuHtOA93w35dYTsvhLPVnYs9eStHfGJvOvKxVfELGroGkvsg+p" crossorigin="anonymous"/>    
+    <style>
+        body{
+            font-family: Verdana, Tahoma, Geneva, arial, sans-serif;
+        }
+        #left .coverart{
+            margin: 20px !important;
+            width: 200px !important;
+        }
+        #left{
+            float:left;
+            width: 250px;
+        }
+        #right{
+            display: table;
+            margin-right: 20px;
+        }
+        .inline{
+           display: inline;
+        }
+        #people{
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        #description{
+            border: 1px solid black;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        #search{
+            margin-top: 20px;
+        }
+        #search ul li{
+            list-style-type: none;
+        }
+        #filesHeader{
+			display: none !important;
+		}
+        .linkBtn{
+            display:block;
+            background:#3184A5;
+            text-align:center;
+            width: 180px;
+            margin:auto;
+            padding: 10px;
+            color:#fff !important;
+            text-decoration: none !important;
+            font-weight: bold  !important;
+        }
+    </style>
     <style type="text/css">
         #topSongsHeader, #filesHeader, #subDirsHeader {
             display: inline-block;
@@ -74,7 +124,12 @@
         if (!mediaDir.siblingAlbums) {
             mediaDir.siblingAlbums = [];
         }
-
+		
+		$('#albumName').text(mediaDir.title);
+		$('#author').append(mediaDir.artist);
+		$('#narrator').append(mediaDir.narrator);
+		$('#description').append(mediaDir.description);
+		
         generateMediaDirThumb();
         refreshViewDependentComponents();
 
@@ -157,7 +212,7 @@
 
     function generateMediaDirThumb() {
         var urlBase = "<c:url value='/coverArtJsp.view'/>";
-        $.get(urlBase + '?coverArtSize=${model.coverArtSizeLarge}&showZoom=true&showChange=${model.user.coverArtRole}&albumId=' + mediaDir.id, data => {
+        $.get(urlBase + '?coverArtSize=200&showZoom=false&showChange=false&albumId=' + mediaDir.id, data => {
             $('#mediaDirThumb').html(data);
         });
     }
@@ -240,6 +295,7 @@
     }
 
     function init() {
+				
         $("a.fancy").fancyZoom({
             minBorder: 30
         });
@@ -509,8 +565,6 @@
             onAddNext(filesTable.row( $(this).parents('tr') ));
         } );
 
-        $("#filesHeader").html("<h2 style='margin: 0'>Files</h2>");
-
         /** SUBDIRS **/
         subDirsTable = $("#subDirsTable").DataTable( {
             deferRender: true,
@@ -732,6 +786,8 @@
                 getMediaDirectories(initialIds, initialPaths);
             }
         });
+		
+		$('#description').append(mediaDir.files[0].description);
     }
 
   <c:if test="${model.showArtistInfo}">
@@ -1012,22 +1068,13 @@
         var url = null;
         switch(vendor) {
             case "google":
-                url = 'https://www.google.com/search?q=' + encodeURIComponent('"' + mediaDir.artist + '" "' + mediaDir.album + '"');
+                url = 'https://www.google.com/search?q=inauthor:' + encodeURIComponent(mediaDir.artist) + ' intitle:' + encodeURIComponent(mediaDir.album) + '&tbm=bks';
                 break;
-            case "wikipedia":
-                url = 'https://en.wikipedia.org/wiki/Special:Search?go=Go&search=' + encodeURIComponent('"' + mediaDir.album + '"');
+            case "audible":
+                url = 'https://www.audible.com/search?title=' + encodeURIComponent(mediaDir.album) + '&author_author=' + encodeURIComponent(mediaDir.artist);
                 break;
-            case "allmusic":
-                url = 'https://www.allmusic.com/search/albums/' + encodeURIComponent('"' + mediaDir.artist + '" "' + mediaDir.album + '"');
-                break;
-            case "lastfm":
-                url = 'https://www.last.fm/search?type=album&q=' + encodeURIComponent('"' + mediaDir.artist + '" "' + mediaDir.album + '"');
-                break;
-            case "discogs":
-                url = 'https://www.discogs.com/search/?type=release&q=' + encodeURIComponent('"' + mediaDir.artist + '" "' + mediaDir.album + '"');
-                break;
-            case "musicbrainz":
-                url = mediaDir.musicBrainzReleaseId != null ? ('https://musicbrainz.org/release/' + mediaDir.musicBrainzReleaseId) : null;
+            case "goodreads":
+                url = 'https://www.goodreads.com/search?q=' + encodeURIComponent(mediaDir.album);
                 break;
         }
 
@@ -1059,149 +1106,50 @@
             refreshViewDependentComponents();
         }
     }
+	
 </script>
 </head>
-<body class="mainframe bgcolor1" onload="init();">
-<div style="float:left">
-    <h1>
-        <img id="starImage" src="<spring:theme code='ratingOffImage'/>"
-             onclick="toggleMediaDirStar(!mediaDir.starred); return false;" style="cursor:pointer;height:18px;" alt="">
+	<body class="mainframe bgcolor1" onload="init();">
+		<div id="wrapper">
+			<div id="left">
+				<c:if test="${model.navigateUpAllowed}">
+					<sub:url value="main.view" var="upUrl">
+						<sub:param name="id" value="${model.parent.id}"/>
+					</sub:url>
+					<div><a href="${upUrl}"><i class="fas fa-arrow-left"></i></a></div>
+					<c:set var="needSep" value="true"/>
+				</c:if>
+			
+				<div style="display: flex; flex-flow: row wrap;">
+					<div id="mediaDirThumb" class="albumThumb pagetype-dependent type-album"></div>
+				</div>
+				
+				<div>
+				<a href="#" onclick='alert("Not implemented yet, use play buttons on the files")' class="linkBtn">Play</a><br/>
+				<a href='#' onclick='alert("Not implemented yet")' class="linkBtn">Download</a>
+				</div>
+				<div id="search">
+					<b>Search:</b><br/>
+					<a href="#" onclick="searchExternally('audible')">Audible</a>
+					<br>
+					<a href="#" onclick="searchExternally('goodreads')">Goodreads</a>
+					<br>
+					<a href="#" onclick="searchExternally('google')">Google</a></div>
+			</div>
+			<div id="right">
+				<h1 id="albumName"></h1>
+				
+				<div id="people">
+					<div id="author" class="inline"><b>Author:</b> <a href='main.view?id=<c:out value="${model.ancestors[0].id}" />'><c:out value="${model.artist}" /></a></div>
+					<div id="narrator" class="inline"><b>Narrator:</b> <c:out value="${model.files[0].narrator}" /></div>
+				</div>
+						
+						
+				<div id="description"><c:out value="${model.files[0].description}" /></div>
 
-        <span id="ancestors" style="vertical-align: middle"></span>
+				<table id="filesTable" class="music indent hover nowrap stripe compact <c:if test='${!model.visibility.headerVisible}'>hide-table-header</c:if>" style="width: 100%;"></table>
 
-        <div id="avgRating" style="display: inline-block"></div>
-    </h1>
-
-    <c:if test="${not model.partyMode}">
-        <h2>
-            <c:if test="${model.user.streamRole}">
-                <div class="pagetype-dependent type-album type-artist" style="display: inline-block;">
-                    <span class="header"><a href="javascript:playAll()"><fmt:message key="main.playall"/></a></span> |
-                    <span class="header"><a href="javascript:playRandom()"><fmt:message key="main.playrandom"/></a></span> |
-                    <span class="header"><a href="javascript:addAll()"><fmt:message key="main.addall"/></a></span> |
-                </div>
-            </c:if>
-
-            <c:if test="${model.user.downloadRole}">
-                <div class="pagetype-dependent type-album" style="display: inline-block;">
-                    <span class="header"><a href="javascript:downloadAll()"><fmt:message key="main.downloadall"/></a></span> |
-                </div>
-            </c:if>
-
-            <c:if test="${model.user.coverArtRole}">
-                <div class="pagetype-dependent type-album" style="display: inline-block;">
-                    <span class="header"><a href="javascript:editTagsPage()"><fmt:message key="main.tags"/></a></span> |
-                </div>
-            </c:if>
-
-            <c:if test="${model.user.commentRole}">
-                <span class="header"><a href="javascript:toggleComment()"><fmt:message key="main.comment"/></a></span> |
-            </c:if>
-        </h2>
-    </c:if>
-</div>
-
-<div style="float:right;padding-right:1em">
-    <img id="viewAsList" src="<spring:theme code='viewAsListImage'/>" alt="" class="headerSelected" style="margin-right:8px" onclick="setViewAsList(true)"/>
-    <img id="viewAsGrid" src="<spring:theme code='viewAsGridImage'/>" alt="" class="headerNotSelected" onclick="setViewAsList(false)"/>
-</div>
-<div style="clear:both"></div>
-
-<div class="detail pagetype-dependent type-album">
-    <c:if test="${model.user.commentRole}">
-        <div id="userRating" style="display: inline-block;"></div>
-    </c:if>
-
-    <c:if test="${model.user.shareRole}">
-        <span class="header"><a href="javascript:shareAlbum()"><img src="<spring:theme code='shareSmallImage'/>" style="height:18px;" alt=""></a>
-            <a href="javascript:shareAlbum()"><fmt:message key="main.sharealbum"/></a> </span> |
-    </c:if>
-
-        <span class="header external-search"><fmt:message key="top.search"/>: <a href="#" onclick="searchExternally('google')">Google</a> |</span>
-        <span class="header external-search"><a href="#" onclick="searchExternally('wikipedia')">Wikipedia</a> |</span>
-        <span class="header external-search"><a href="#" onclick="searchExternally('allmusic')">allmusic</a> |</span>
-        <span class="header external-search"><a href="#" onclick="searchExternally('lastfm')">Last.fm</a> |</span>
-        <span class="header external-search"><a href="#" onclick="searchExternally('discogs')">Discogs</a> |</span>
-        <span class="header external-search musicbrainz"><a href="#" onclick="searchExternally('musicbrainz')">MusicBrainz</a> |</span>
-</div>
-
-<div id="playCountData" class="detail pagetype-dependent type-album"></div>
-
-<div id="comment" class="albumComment"></div>
-
-<div id="commentForm" style="display:none">
-    <form method="post" action="setMusicFileInfo.view">
-        <sec:csrfInput />
-        <input type="hidden" name="action" value="comment">
-        <input type="hidden" id="commentFormId" name="id" value="">
-        <textarea name="comment" rows="6" cols="70"></textarea>
-        <input type="submit" value="<fmt:message key='common.save'/>">
-    </form>
-</div>
-
-<div class="tableSpacer"></div>
-
-<table id="filesTable" class="music indent hover nowrap stripe compact <c:if test='${!model.visibility.headerVisible}'>hide-table-header</c:if>" style="width: 100%;">
-</table>
-
-<select id="moreActions" class="pagetype-dependent type-album type-video" onchange="actionSelected(this.options[selectedIndex].id);" style="margin-bottom:1.0em">
-    <option id="top" selected="selected"><fmt:message key="main.more.selection"/></option>
-    <option id="selectAll">&nbsp;&nbsp;<fmt:message key="playlist.more.selectall"/></option>
-    <option id="selectNone">&nbsp;&nbsp;<fmt:message key="playlist.more.selectnone"/></option>
-    <c:if test="${model.user.downloadRole}">
-        <option id="download">&nbsp;&nbsp;<fmt:message key="common.download"/></option>
-    </c:if>
-    <c:if test="${model.user.shareRole}">
-        <option id="share">&nbsp;&nbsp;<fmt:message key="main.more.share"/></option>
-    </c:if>
-    <option id="appendPlaylist">&nbsp;&nbsp;<fmt:message key="playlist.append"/></option>
-    <option id="star">&nbsp;&nbsp;<fmt:message key="playlist.more.star"/></option>
-    <option id="unstar">&nbsp;&nbsp;<fmt:message key="playlist.more.unstar"/></option>
-</select>
-
-<div class="tableSpacer"></div>
-
-<div style="display: flex; flex-flow: row wrap;">
-    <div id="mediaDirThumb" class="albumThumb pagetype-dependent type-album"></div>
-    <table id="subDirsTable" class="music indent hover nowrap stripe compact hide-table-header" style="width: 100%;"></table>
-</div>
-
-<div class="tableSpacer"></div>
-
-<div id="thumbs"></div>
-
-<table id="artistInfoTable" style="padding:2em;clear:both" class="bgcolor2 dropshadow pagetype-dependent type-album type-artist">
-    <tr class="pagetype-dependent type-artist">
-        <td rowspan="5" style="vertical-align: top">
-            <a id="artistImageZoom" rel="zoom" href="#">
-                <img id="artistImage" class="dropshadow" alt="" style="margin-right:2em; max-width:300px; max-height:300px">
-            </a>
-        </td>
-        <td id="artistTitle" style="text-align:center"><h2></h2></td>
-    </tr>
-    <tr class="pagetype-dependent type-artist">
-        <td id="artistBio" style="padding-bottom: 0.5em"></td>
-    </tr>
-    <tr id="similarArtistsContainer" class="pagetype-dependent type-album type-artist"><td style="padding-bottom: 0.5em">
-        <span style="padding-right: 0.5em; display: none"><fmt:message key="main.similarartists"/>:</span>
-        <span id="similarArtists"></span>
-    </td></tr>
-    <tr><td style="text-align:center">
-        <div>
-            <div class="pagetype-dependent type-album type-artist" style="display: inline-block"><button id="similarArtistsRadio" style="margin-top:1em;margin-right:0.3em;cursor:pointer" onclick="playSimilar()"><fmt:message key='main.startradio'/></button></div>
-            <div class="pagetype-dependent type-artist" style="display: inline-block"><button id="playTopSongs" style="margin-top:1em;margin-left:0.3em;cursor:pointer" onclick="playAllTopSongs()"><fmt:message key='main.playtopsongs'/></button></div>
-        </div>
-    </td></tr>
-    <tr><td style="height: 100%"></td></tr>
-</table>
-
-<table id="artistTopSongsTable" class="music indent hover nowrap stripe compact hide-table-header" style="width: 100%;">
-</table>
-
-<div id="dialog-select-playlist" title="<fmt:message key='playlist.append'/>" style="display: none;">
-    <p><fmt:message key="main.addtoplaylist.text"/></p>
-    <div id="dialog-select-playlist-list"></div>
-</div>
-
-</body>
+			</div>
+		</div>
+	</body>
 </html>

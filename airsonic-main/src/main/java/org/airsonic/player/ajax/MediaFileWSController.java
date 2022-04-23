@@ -77,6 +77,8 @@ public class MediaFileWSController {
         entry.setSubDirs(mediaFileService.toMediaFileEntryList(subDirs, user.getName(), false, false, null, null, null));
         entry.setAncestors(mediaFileService.toMediaFileEntryList(getAncestors(dir), user.getName(), false, false, null, null, null));
         entry.setComment(dir.getComment());
+        entry.setNarrator(dir.getNarrator());
+        entry.setDescription(dir.getDescription());
         if (dir.isAlbum()) {
             List<MediaFile> siblingAlbums = getSiblingAlbums(dir);
             entry.setSiblingAlbums(mediaFileService.toMediaFileEntryList(siblingAlbums, user.getName(), false, false, null, null, null));
@@ -223,6 +225,8 @@ public class MediaFileWSController {
         private Integer userRating;
         private Double averageRating;
         private String comment;
+        private String description;
+        private String narrator;
 
         // Albums only
         private List<MediaFileEntry> siblingAlbums;
@@ -275,6 +279,22 @@ public class MediaFileWSController {
 
         public void setMusicBrainzReleaseId(String musicBrainzReleaseId) {
             this.musicBrainzReleaseId = musicBrainzReleaseId;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
+        }
+
+        public String getNarrator() {
+            return narrator;
+        }
+
+        public void setNarrator(String narrator) {
+            this.narrator = narrator;
         }
 
         public List<MediaFileEntry> getSubDirs() {
