@@ -170,7 +170,10 @@ public class MediaFileDao extends AbstractDao {
                     "present=:pres," +
                     "version=:ver," +
                     "mb_release_id=:mbrelid," +
-                    "mb_recording_id=:mbrecid " +
+                    "mb_recording_id=:mbrecid, " +
+                    "description=:description, " +
+                    "narrator=:narrator, " +
+                    "language=:language " +
                     "where id=:id";
         } else {
             sql = "update media_file set " +
@@ -200,7 +203,10 @@ public class MediaFileDao extends AbstractDao {
                     "present=:pres," +
                     "version=:ver," +
                     "mb_release_id=:mbrelid," +
-                    "mb_recording_id=:mbrecid " +
+                    "mb_recording_id=:mbrecid, " +
+                    "description=:description, " +
+                    "narrator=:narrator, " +
+                    "language=:language " +
                     "where path=:path and folder_id=:fid";
         }
 
@@ -235,6 +241,9 @@ public class MediaFileDao extends AbstractDao {
         args.put("ver", VERSION);
         args.put("mbrelid", file.getMusicBrainzReleaseId());
         args.put("mbrecid", file.getMusicBrainzRecordingId());
+        args.put("description", getDescription(file));
+        args.put("narrator", getNarrator(file));
+        args.put("language", getLanguage(file));
 
         int n = namedUpdate(sql, args);
 
@@ -914,9 +923,10 @@ public class MediaFileDao extends AbstractDao {
                     rs.getInt("version"),
                     rs.getString("mb_release_id"),
                     rs.getString("mb_recording_id"),
-                    "",
-                    "",
-                    "");
+                    rs.getString("description"),
+                    rs.getString("narrator"),
+                    rs.getString("language")
+            );
         }
     }
 
