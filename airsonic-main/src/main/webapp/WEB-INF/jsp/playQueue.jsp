@@ -646,7 +646,7 @@
             if (this.autoBookmark) {
                 var song = this.songs[this.currentSongIndex];
                 var positionMillis = Math.round(this.audioPlayer.currentTime * 1000);
-                top.StompClient.send("/app/bookmarks/set", JSON.stringify({positionMillis: positionMillis, comment: "Played on Web Player " + this.player.id, mediaFileId: song.id}));
+                top.StompClient.send("/app/bookmarks/set", JSON.stringify({positionMillis: positionMillis, comment: "Played on Web Player", mediaFileId: song.id}));
             }
         },
         lastProgressionBookmarkTime: 0,
