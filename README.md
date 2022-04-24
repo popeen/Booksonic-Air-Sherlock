@@ -11,6 +11,9 @@ Booksonic Air - Sherlock
 [![Buy me a coffee][buymeacoffee-shield]][buymeacoffee-link]
 
 
+**OBS:** This version is very early BETA, you probably want [Booksonic Air](https://github.com/popeen/Booksonic-Air) for now
+
+
 What is Booksonic?
 -----------------
 
