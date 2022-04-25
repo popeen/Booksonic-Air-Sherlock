@@ -2285,6 +2285,8 @@ public class SubsonicRESTController {
         AlbumNotes albumNotes = this.lastFmService.getAlbumNotes(mediaFile);
 
         AlbumInfo result = getAlbumInfoInternal(albumNotes);
+        result.setNotes(mediaFile.getDescription()); //Override the lastFm description with our own
+
         Response res = createResponse();
         res.setAlbumInfo(result);
         this.jaxbWriter.writeResponse(request, response, res);
